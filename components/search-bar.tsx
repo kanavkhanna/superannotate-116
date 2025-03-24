@@ -13,7 +13,7 @@ import type { GitHubUser } from "@/types/github"
 interface SearchBarProps {
   username: string
   setUsername: (username: string) => void
-  searchUser: (username?: string) => void // Updated to accept a username parameter
+  searchUser: (username?: string) => void
   clearSearch: () => void
   loading: boolean
   error: string | null
@@ -23,20 +23,45 @@ export function SearchBar({ username, setUsername, searchUser, clearSearch, load
   const [suggestions, setSuggestions] = useState<GitHubUser[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState(-1)
   const suggestionsRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+    if (showSuggestions && suggestions.length > 0) {
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault()
+          setSelectedIndex((prevIndex) => (prevIndex === suggestions.length - 1 ? 0 : prevIndex + 1))
+          break
+        case "ArrowUp":
+          e.preventDefault()
+          setSelectedIndex((prevIndex) => (prevIndex <= 0 ? suggestions.length - 1 : prevIndex - 1))
+          break
+        case "Enter":
+          e.preventDefault()
+          if (selectedIndex >= 0) {
+            handleSuggestionClick(suggestions[selectedIndex].login)
+          } else {
+            setShowSuggestions(false)
+            searchUser()
+          }
+          break
+        case "Escape":
+          e.preventDefault()
+          setShowSuggestions(false)
+          setSelectedIndex(-1)
+          break
+      }
+    } else if (e.key === "Enter") {
       e.preventDefault()
-      setShowSuggestions(false)
-      searchUser() // Search with current username from state
-    } else if (e.key === "Escape") {
-      setShowSuggestions(false)
+      searchUser()
     }
   }
 
   const handleInputChange = (value: string) => {
     setUsername(value)
+    setSelectedIndex(-1)
 
     // Clear previous timeout
     if (searchTimeout) {
@@ -69,15 +94,35 @@ export function SearchBar({ username, setUsername, searchUser, clearSearch, load
   const handleSuggestionClick = (login: string) => {
     setUsername(login)
     setShowSuggestions(false)
+    setSelectedIndex(-1)
     // Pass the username directly to searchUser to avoid timing issues
     searchUser(login)
   }
 
+  // Scroll selected item into view
+  useEffect(() => {
+    if (selectedIndex >= 0 && suggestionsRef.current) {
+      const suggestionItems = suggestionsRef.current.querySelectorAll('[role="option"]')
+      if (suggestionItems[selectedIndex]) {
+        suggestionItems[selectedIndex].scrollIntoView({
+          block: "nearest",
+          behavior: "smooth",
+        })
+      }
+    }
+  }, [selectedIndex])
+
   // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(event.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target as Node)
+      ) {
         setShowSuggestions(false)
+        setSelectedIndex(-1)
       }
     }
 
@@ -96,11 +141,17 @@ export function SearchBar({ username, setUsername, searchUser, clearSearch, load
     }
   }, [searchTimeout])
 
+  // Reset selected index when suggestions change
+  useEffect(() => {
+    setSelectedIndex(-1)
+  }, [suggestions])
+
   return (
     <div className="flex flex-col gap-2 mb-8">
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Input
+            ref={inputRef}
             placeholder="Enter GitHub username"
             value={username}
             onChange={(e) => handleInputChange(e.target.value)}
@@ -110,6 +161,10 @@ export function SearchBar({ username, setUsername, searchUser, clearSearch, load
             aria-label="GitHub username"
             aria-invalid={error ? "true" : "false"}
             aria-describedby={error ? "username-error" : undefined}
+            aria-expanded={showSuggestions}
+            aria-controls={showSuggestions ? "suggestions-list" : undefined}
+            aria-autocomplete="list"
+            role="combobox"
           />
           {username && (
             <button
@@ -125,13 +180,20 @@ export function SearchBar({ username, setUsername, searchUser, clearSearch, load
           {showSuggestions && (
             <div
               ref={suggestionsRef}
+              id="suggestions-list"
               className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
+              role="listbox"
             >
-              {suggestions.map((user) => (
+              {suggestions.map((user, index) => (
                 <div
                   key={user.login}
-                  className="flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer"
+                  role="option"
+                  aria-selected={index === selectedIndex}
+                  className={`flex items-center gap-2 p-2 cursor-pointer ${
+                    index === selectedIndex ? "bg-primary/10 text-foreground" : "hover:bg-gray-100"
+                  }`}
                   onClick={() => handleSuggestionClick(user.login)}
+                  onMouseEnter={() => setSelectedIndex(index)}
                 >
                   <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
                     <img

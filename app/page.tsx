@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import type { GitHubUser, GitHubRepo } from "@/types/github"
 import { fetchGitHubUser } from "@/services/github-service"
 import { SearchBar } from "@/components/search-bar"
@@ -10,7 +11,6 @@ import { RepositoryList } from "@/components/repository-list"
 import { SavedProfiles } from "@/components/saved-profiles"
 import { EmptyState } from "@/components/empty-state"
 import { ProfileSkeleton, RepositorySkeleton } from "@/components/skeleton-loaders"
-import { ConfirmationDialog } from "@/components/confirmation-dialog"
 
 export default function Home() {
   const [username, setUsername] = useState("")
@@ -20,8 +20,10 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [savedProfiles, setSavedProfiles] = useState<string[]>([])
   const [hasSearched, setHasSearched] = useState(false)
-  const [profileToRemove, setProfileToRemove] = useState<string | null>(null)
-  const { toast } = useToast()
+  const { toast: uiToast } = useToast()
+
+  // Use a ref to track removed profiles for undo functionality
+  const removedProfilesRef = useRef<Map<string, number>>(new Map())
 
   // Load saved profiles on component mount
   useEffect(() => {
@@ -38,19 +40,21 @@ export default function Home() {
     }
   }, [])
 
+  // Save profiles to localStorage
+  const saveProfilesToStorage = (profiles: string[]) => {
+    localStorage.setItem("savedGithubProfiles", JSON.stringify(profiles))
+  }
+
   // Clear search results
   const clearResults = () => {
     setUser(null)
     setRepos([])
   }
 
-  // Search for a GitHub user - updated to ensure the username parameter is properly handled
+  // Search for a GitHub user
   const searchUser = (searchUsername?: string) => {
     // Use the provided username or fall back to the state value
     const usernameToSearch = searchUsername || username
-
-    // For debugging
-    console.log("Searching for user:", usernameToSearch)
 
     // Clear previous error
     setError(null)
@@ -82,7 +86,7 @@ export default function Home() {
         }
 
         // Show success toast
-        toast({
+        uiToast({
           title: "Profile loaded",
           description: `Successfully loaded profile for ${user.login}`,
         })
@@ -100,33 +104,24 @@ export default function Home() {
       })
   }
 
-  // Confirm removal of a saved profile
-  const confirmRemoveProfile = () => {
-    if (profileToRemove) {
-      const newSavedProfiles = savedProfiles.filter((profile) => profile !== profileToRemove)
-      setSavedProfiles(newSavedProfiles)
-      localStorage.setItem("savedGithubProfiles", JSON.stringify(newSavedProfiles))
-
-      toast({
-        title: "Profile removed",
-        description: `${profileToRemove} has been removed from your saved profiles`,
-        variant: "destructive",
-      })
-
-      setProfileToRemove(null)
-    }
-  }
-
   // Toggle saving a profile
   const toggleSaveProfile = (username: string) => {
     if (savedProfiles.includes(username)) {
-      setProfileToRemove(username)
+      removeProfile(username)
     } else {
+      addProfile(username)
+    }
+  }
+
+  // Add a profile to saved profiles
+  const addProfile = (username: string) => {
+    // Only add if it doesn't already exist
+    if (!savedProfiles.includes(username)) {
       const newSavedProfiles = [...savedProfiles, username]
       setSavedProfiles(newSavedProfiles)
-      localStorage.setItem("savedGithubProfiles", JSON.stringify(newSavedProfiles))
+      saveProfilesToStorage(newSavedProfiles)
 
-      toast({
+      uiToast({
         title: "Profile saved",
         description: `${username} has been added to your saved profiles`,
       })
@@ -151,9 +146,50 @@ export default function Home() {
     setHasSearched(false)
   }
 
-  // Remove a profile from saved profiles
-  const removeFromSavedProfiles = (username: string) => {
-    setProfileToRemove(username)
+  // Remove a profile from saved profiles with undo functionality
+  const removeProfile = (username: string) => {
+    // Generate a unique ID for this removal action
+    const undoId = Date.now()
+
+    // Store the removed profile in our ref for undo functionality
+    removedProfilesRef.current.set(username, undoId)
+
+    // Update the saved profiles list
+    const newSavedProfiles = savedProfiles.filter((profile) => profile !== username)
+    setSavedProfiles(newSavedProfiles)
+    saveProfilesToStorage(newSavedProfiles)
+
+    // Show toast with undo button
+    toast.error(`Removed ${username} from saved profiles`, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: () => undoRemoveProfile(username, undoId),
+      },
+    })
+  }
+
+  // Undo the removal of a profile
+  const undoRemoveProfile = (username: string, undoId: number) => {
+    // Check if this is the most recent removal of this profile
+    const storedId = removedProfilesRef.current.get(username)
+
+    if (storedId === undoId) {
+      // Add the profile back to the saved list
+      setSavedProfiles((currentProfiles) => {
+        // Only add if it doesn't already exist
+        if (!currentProfiles.includes(username)) {
+          const updatedProfiles = [...currentProfiles, username]
+          saveProfilesToStorage(updatedProfiles)
+          toast.success(`Restored ${username} to saved profiles`)
+          return updatedProfiles
+        }
+        return currentProfiles
+      })
+
+      // Remove from our tracking ref
+      removedProfilesRef.current.delete(username)
+    }
   }
 
   return (
@@ -172,6 +208,9 @@ export default function Home() {
         loading={loading}
         error={error}
       />
+
+      {/* Saved profiles section moved below search - always show this section */}
+      <SavedProfiles savedProfiles={savedProfiles} loadSavedProfile={loadSavedProfile} removeProfile={removeProfile} />
 
       {loading ? (
         <div className="space-y-6">
@@ -195,22 +234,6 @@ export default function Home() {
           )}
         </>
       )}
-
-      <SavedProfiles
-        savedProfiles={savedProfiles}
-        loadSavedProfile={loadSavedProfile}
-        removeProfile={removeFromSavedProfiles}
-      />
-
-      <ConfirmationDialog
-        isOpen={!!profileToRemove}
-        onClose={() => setProfileToRemove(null)}
-        onConfirm={confirmRemoveProfile}
-        title="Remove Saved Profile"
-        description={`Are you sure you want to remove "${profileToRemove}" from your saved profiles?`}
-        confirmText="Remove"
-        cancelText="Cancel"
-      />
     </main>
   )
 }
