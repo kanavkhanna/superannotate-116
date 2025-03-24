@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useToast } from "@/hooks/use-toast"
 import type { GitHubUser, GitHubRepo } from "@/types/github"
-import { fetchGitHubUser, searchGitHubUsers } from "@/services/github-service"
+import { fetchGitHubUser } from "@/services/github-service"
 import { SearchBar } from "@/components/search-bar"
 import { ProfileCard } from "@/components/profile-card"
 import { RepositoryList } from "@/components/repository-list"
@@ -21,38 +21,36 @@ export default function Home() {
   const [savedProfiles, setSavedProfiles] = useState<string[]>([])
   const [hasSearched, setHasSearched] = useState(false)
   const [profileToRemove, setProfileToRemove] = useState<string | null>(null)
-  const [popularProfiles, setPopularProfiles] = useState<GitHubUser[]>([])
   const { toast } = useToast()
 
-  // Load saved profiles from localStorage on component mount
+  // Load saved profiles on component mount
   useEffect(() => {
+    // Load saved profiles from localStorage
     const saved = localStorage.getItem("savedGithubProfiles")
     if (saved) {
-      setSavedProfiles(JSON.parse(saved))
+      try {
+        const parsedProfiles = JSON.parse(saved)
+        setSavedProfiles(Array.isArray(parsedProfiles) ? parsedProfiles : [])
+      } catch (e) {
+        console.error("Error parsing saved profiles:", e)
+        setSavedProfiles([])
+      }
     }
-
-    // Load some popular profiles for the empty state
-    loadPopularProfiles()
   }, [])
 
-  const loadPopularProfiles = async () => {
-    try {
-      // Get a few popular profiles to display
-      const profiles = await searchGitHubUsers("")
-      setPopularProfiles(profiles.slice(0, 6))
-    } catch (error) {
-      console.error("Failed to load popular profiles", error)
-    }
-  }
-
+  // Clear search results
   const clearResults = () => {
     setUser(null)
     setRepos([])
   }
 
-  const searchUser = async (searchUsername?: string) => {
+  // Search for a GitHub user - updated to ensure the username parameter is properly handled
+  const searchUser = (searchUsername?: string) => {
     // Use the provided username or fall back to the state value
     const usernameToSearch = searchUsername || username
+
+    // For debugging
+    console.log("Searching for user:", usernameToSearch)
 
     // Clear previous error
     setError(null)
@@ -64,40 +62,45 @@ export default function Home() {
       return
     }
 
+    // Set loading state and mark as searched
     setLoading(true)
     setHasSearched(true)
 
-    // Always clear previous results when starting a new search
+    // Clear previous results
     clearResults()
 
-    try {
-      // Fetch user data from the GitHub service
-      const { user, repos } = await fetchGitHubUser(usernameToSearch)
+    // Fetch user data
+    fetchGitHubUser(usernameToSearch)
+      .then(({ user, repos }) => {
+        // Update state with the fetched data
+        setUser(user)
+        setRepos(repos)
 
-      setUser(user)
-      setRepos(repos)
+        // Update the input field to match the searched username
+        if (searchUsername) {
+          setUsername(searchUsername)
+        }
 
-      // Update the input field to match the searched username
-      if (searchUsername) {
-        setUsername(searchUsername)
-      }
-
-      // Show success toast
-      toast({
-        title: "Profile loaded",
-        description: `Successfully loaded profile for ${user.login}`,
+        // Show success toast
+        toast({
+          title: "Profile loaded",
+          description: `Successfully loaded profile for ${user.login}`,
+        })
       })
-    } catch (err) {
-      // Handle errors
-      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred"
-      setError(errorMessage)
-      clearResults()
-    } finally {
-      setLoading(false)
-    }
+      .catch((err) => {
+        // Handle errors
+        const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred"
+        console.error("Search error:", errorMessage)
+        setError(errorMessage)
+        clearResults()
+      })
+      .finally(() => {
+        // Clear loading state
+        setLoading(false)
+      })
   }
 
-  // Update the confirmRemoveProfile function to properly remove the profile
+  // Confirm removal of a saved profile
   const confirmRemoveProfile = () => {
     if (profileToRemove) {
       const newSavedProfiles = savedProfiles.filter((profile) => profile !== profileToRemove)
@@ -114,7 +117,7 @@ export default function Home() {
     }
   }
 
-  // Make sure the toggleSaveProfile function is correctly implemented
+  // Toggle saving a profile
   const toggleSaveProfile = (username: string) => {
     if (savedProfiles.includes(username)) {
       setProfileToRemove(username)
@@ -130,6 +133,7 @@ export default function Home() {
     }
   }
 
+  // Check if a profile is saved
   const isProfileSaved = (username: string) => {
     return savedProfiles.includes(username)
   }
@@ -139,7 +143,7 @@ export default function Home() {
     searchUser(profileName)
   }
 
-  // Update the SearchBar component usage to include the clearSearch function
+  // Clear the search
   const clearSearch = () => {
     setUsername("")
     clearResults()
@@ -147,7 +151,7 @@ export default function Home() {
     setHasSearched(false)
   }
 
-  // Function to handle removing a profile
+  // Remove a profile from saved profiles
   const removeFromSavedProfiles = (username: string) => {
     setProfileToRemove(username)
   }
@@ -163,7 +167,7 @@ export default function Home() {
       <SearchBar
         username={username}
         setUsername={setUsername}
-        searchUser={() => searchUser()}
+        searchUser={searchUser}
         clearSearch={clearSearch}
         loading={loading}
         error={error}
@@ -187,10 +191,7 @@ export default function Home() {
               <RepositoryList repos={repos} />
             </div>
           ) : (
-            !error &&
-            !hasSearched && (
-              <EmptyState popularProfiles={popularProfiles} onProfileClick={(username) => searchUser(username)} />
-            )
+            !error && !hasSearched && <EmptyState />
           )}
         </>
       )}

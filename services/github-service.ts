@@ -149,22 +149,6 @@ const mockRepos: Record<string, GitHubRepo[]> = {
       stargazers_count: 2042,
       language: null,
     },
-    {
-      id: 64778136,
-      name: "octocat.github.io",
-      html_url: "https://github.com/octocat/octocat.github.io",
-      description: null,
-      stargazers_count: 1024,
-      language: "HTML",
-    },
-    {
-      id: 17881631,
-      name: "Spoon-Knife",
-      html_url: "https://github.com/octocat/Spoon-Knife",
-      description: "This repo is for demonstration purposes only",
-      stargazers_count: 11257,
-      language: "HTML",
-    },
   ],
   gaearon: [
     {
@@ -191,14 +175,6 @@ const mockRepos: Record<string, GitHubRepo[]> = {
       stargazers_count: 12200,
       language: "JavaScript",
     },
-    {
-      id: 75376963,
-      name: "overreacted.io",
-      html_url: "https://github.com/gaearon/overreacted.io",
-      description: "Personal blog by Dan Abramov",
-      stargazers_count: 6700,
-      language: "JavaScript",
-    },
   ],
   kentcdodds: [
     {
@@ -223,14 +199,6 @@ const mockRepos: Record<string, GitHubRepo[]> = {
       html_url: "https://github.com/kentcdodds/react-hooks",
       description: "Learn React Hooks! 🎣 ⚛",
       stargazers_count: 3900,
-      language: "JavaScript",
-    },
-    {
-      id: 105784815,
-      name: "epic-react-dev",
-      html_url: "https://github.com/kentcdodds/epic-react-dev",
-      description: "The Epic React Dev website",
-      stargazers_count: 1200,
       language: "JavaScript",
     },
   ],
@@ -275,14 +243,6 @@ const mockRepos: Record<string, GitHubRepo[]> = {
       html_url: "https://github.com/sindresorhus/refined-github",
       description: "Browser extension that simplifies the GitHub interface and adds useful features",
       stargazers_count: 19700,
-      language: "TypeScript",
-    },
-    {
-      id: 32948223,
-      name: "p-queue",
-      html_url: "https://github.com/sindresorhus/p-queue",
-      description: "Promise queue with concurrency control",
-      stargazers_count: 3800,
       language: "TypeScript",
     },
     {
@@ -389,14 +349,6 @@ const mockRepos: Record<string, GitHubRepo[]> = {
       stargazers_count: 25700,
       language: "TypeScript",
     },
-    {
-      id: 260287870,
-      name: "commerce",
-      html_url: "https://github.com/vercel/commerce",
-      description: "Next.js Commerce",
-      stargazers_count: 7800,
-      language: "TypeScript",
-    },
   ],
   bradtraversy: [
     {
@@ -426,60 +378,63 @@ const mockRepos: Record<string, GitHubRepo[]> = {
   ],
 }
 
-// Function to search for a user in our mock data
-export async function fetchGitHubUser(username: string): Promise<{ user: GitHubUser; repos: GitHubRepo[] }> {
+// Function to search for a user in our mock data - simplified for reliability
+export function fetchGitHubUser(username: string): Promise<{ user: GitHubUser; repos: GitHubRepo[] }> {
   return new Promise((resolve, reject) => {
+    // Simulate different error scenarios
+    if (username.toLowerCase() === "error") {
+      reject(new Error("Network error: Unable to connect to server"))
+      return
+    }
+
+    if (username.toLowerCase() === "timeout") {
+      reject(new Error("Request timed out. Please check your connection and try again."))
+      return
+    }
+
+    if (username.toLowerCase() === "ratelimit") {
+      reject(new Error("API rate limit exceeded. Please try again later."))
+      return
+    }
+
+    // Search for the user in our mock data (case insensitive)
+    const user = mockUsers.find((user) => user.login.toLowerCase() === username.toLowerCase())
+
+    if (!user) {
+      reject(new Error("User not found. Please check the username and try again."))
+      return
+    }
+
+    // Get the repositories for this user
+    const repos = mockRepos[user.login] || []
+
+    // Simulate a short delay
     setTimeout(() => {
-      // Simulate different error scenarios
-      if (username.toLowerCase() === "error") {
-        reject(new Error("Network error: Unable to connect to server"))
-        return
-      }
-
-      if (username.toLowerCase() === "timeout") {
-        reject(new Error("Request timed out. Please check your connection and try again."))
-        return
-      }
-
-      if (username.toLowerCase() === "ratelimit") {
-        reject(new Error("API rate limit exceeded. Please try again later."))
-        return
-      }
-
-      // Search for the user in our mock data (case insensitive)
-      const user = mockUsers.find((user) => user.login.toLowerCase() === username.toLowerCase())
-
-      if (!user) {
-        reject(new Error("User not found. Please check the username and try again."))
-        return
-      }
-
-      // Get the repositories for this user
-      const repos = mockRepos[user.login] || []
-
       resolve({ user, repos })
-    }, 800) // Simulate network delay
+    }, 500)
   })
 }
 
-// Function to search for users by partial username
-export async function searchGitHubUsers(query: string): Promise<GitHubUser[]> {
+// Function to search for users by partial username - simplified for reliability
+export function searchGitHubUsers(query: string): Promise<GitHubUser[]> {
   return new Promise((resolve) => {
+    if (!query.trim()) {
+      // If no query, return all users for the popular profiles section
+      resolve(mockUsers)
+      return
+    }
+
+    // Filter users whose username or name contains the query (case insensitive)
+    const matchedUsers = mockUsers.filter(
+      (user) =>
+        user.login.toLowerCase().includes(query.toLowerCase()) ||
+        (user.name && user.name.toLowerCase().includes(query.toLowerCase())),
+    )
+
+    // Simulate a short delay
     setTimeout(() => {
-      if (!query.trim()) {
-        resolve([])
-        return
-      }
-
-      // Filter users whose username or name contains the query (case insensitive)
-      const matchedUsers = mockUsers.filter(
-        (user) =>
-          user.login.toLowerCase().includes(query.toLowerCase()) ||
-          (user.name && user.name.toLowerCase().includes(query.toLowerCase())),
-      )
-
       resolve(matchedUsers)
-    }, 300) // Faster response for search suggestions
+    }, 300)
   })
 }
 

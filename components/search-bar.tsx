@@ -13,7 +13,7 @@ import type { GitHubUser } from "@/types/github"
 interface SearchBarProps {
   username: string
   setUsername: (username: string) => void
-  searchUser: () => void
+  searchUser: (username?: string) => void // Updated to accept a username parameter
   clearSearch: () => void
   loading: boolean
   error: string | null
@@ -29,7 +29,7 @@ export function SearchBar({ username, setUsername, searchUser, clearSearch, load
     if (e.key === "Enter") {
       e.preventDefault()
       setShowSuggestions(false)
-      searchUser()
+      searchUser() // Search with current username from state
     } else if (e.key === "Escape") {
       setShowSuggestions(false)
     }
@@ -44,17 +44,18 @@ export function SearchBar({ username, setUsername, searchUser, clearSearch, load
     }
 
     // Set a new timeout to search after typing stops
-    const timeout = setTimeout(async () => {
+    const timeout = setTimeout(() => {
       if (value.trim()) {
-        try {
-          const results = await searchGitHubUsers(value)
-          setSuggestions(results)
-          setShowSuggestions(results.length > 0)
-        } catch (error) {
-          console.error("Error fetching suggestions:", error)
-          setSuggestions([])
-          setShowSuggestions(false)
-        }
+        searchGitHubUsers(value)
+          .then((results) => {
+            setSuggestions(results)
+            setShowSuggestions(results.length > 0)
+          })
+          .catch((error) => {
+            console.error("Error fetching suggestions:", error)
+            setSuggestions([])
+            setShowSuggestions(false)
+          })
       } else {
         setSuggestions([])
         setShowSuggestions(false)
@@ -64,10 +65,12 @@ export function SearchBar({ username, setUsername, searchUser, clearSearch, load
     setSearchTimeout(timeout)
   }
 
+  // Updated to pass the username directly to searchUser
   const handleSuggestionClick = (login: string) => {
     setUsername(login)
     setShowSuggestions(false)
-    searchUser()
+    // Pass the username directly to searchUser to avoid timing issues
+    searchUser(login)
   }
 
   // Close suggestions when clicking outside
@@ -146,7 +149,7 @@ export function SearchBar({ username, setUsername, searchUser, clearSearch, load
             </div>
           )}
         </div>
-        <Button onClick={searchUser} disabled={loading} className="transition-all duration-200 hover:shadow-md">
+        <Button onClick={() => searchUser()} disabled={loading} className="transition-all duration-200 hover:shadow-md">
           {loading ? "Searching..." : "Search"}
           <Search className="ml-2 h-4 w-4" />
         </Button>
