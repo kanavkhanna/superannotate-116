@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useToast } from "@/hooks/use-toast"
 import { toast } from "sonner"
 import type { GitHubUser, GitHubRepo } from "@/types/github"
 import { fetchGitHubUser } from "@/services/github-service"
@@ -13,6 +12,9 @@ import { EmptyState } from "@/components/empty-state"
 import { ProfileSkeleton, RepositorySkeleton } from "@/components/skeleton-loaders"
 
 export default function Home() {
+  // Remove the useToast import and usage
+  // const { toast: uiToast } = useToast() - REMOVED
+
   const [username, setUsername] = useState("")
   const [user, setUser] = useState<GitHubUser | null>(null)
   const [repos, setRepos] = useState<GitHubRepo[]>([])
@@ -20,7 +22,6 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [savedProfiles, setSavedProfiles] = useState<string[]>([])
   const [hasSearched, setHasSearched] = useState(false)
-  const { toast: uiToast } = useToast()
 
   // Use a ref to track removed profiles for undo functionality
   const removedProfilesRef = useRef<Map<string, number>>(new Map())
@@ -86,8 +87,7 @@ export default function Home() {
         }
 
         // Show success toast
-        uiToast({
-          title: "Profile loaded",
+        toast.success("Profile loaded", {
           description: `Successfully loaded profile for ${user.login}`,
         })
       })
@@ -121,8 +121,7 @@ export default function Home() {
       setSavedProfiles(newSavedProfiles)
       saveProfilesToStorage(newSavedProfiles)
 
-      uiToast({
-        title: "Profile saved",
+      toast.success("Profile saved", {
         description: `${username} has been added to your saved profiles`,
       })
     }

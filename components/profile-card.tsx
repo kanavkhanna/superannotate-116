@@ -14,29 +14,31 @@ interface ProfileCardProps {
 
 export function ProfileCard({ user, isProfileSaved, toggleSaveProfile }: ProfileCardProps) {
   return (
-    <Card className="border-primary/20 transition-all duration-200 hover:shadow-md">
+    <Card className="border-primary/20 transition-all duration-200 hover:shadow-md relative">
+      {/* Save button positioned absolutely in the top right corner */}
+      <div className="absolute top-3 right-3 z-10">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleSaveProfile}
+          title={isProfileSaved ? "Remove from saved profiles" : "Save profile"}
+          className="hover:bg-primary/10 transition-colors duration-200"
+        >
+          {isProfileSaved ? (
+            <BookmarkCheck className="h-5 w-5 text-primary" />
+          ) : (
+            <Bookmark className="h-5 w-5 text-primary/70" />
+          )}
+        </Button>
+      </div>
+
       <CardHeader className="flex flex-col sm:flex-row items-center gap-4">
         <Avatar className="h-20 w-20 border border-primary/20">
           <AvatarImage src={user.avatar_url} alt={user.login} />
           <AvatarFallback>{user.login.substring(0, 2).toUpperCase()}</AvatarFallback>
         </Avatar>
         <div className="flex-1 text-center sm:text-left">
-          <div className="flex flex-col sm:flex-row items-center justify-between">
-            <CardTitle className="text-2xl text-black mb-2 sm:mb-0">{user.name || user.login}</CardTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSaveProfile}
-              title={isProfileSaved ? "Remove from saved profiles" : "Save profile"}
-              className="hover:bg-primary/10 transition-colors duration-200"
-            >
-              {isProfileSaved ? (
-                <BookmarkCheck className="h-5 w-5 text-primary" />
-              ) : (
-                <Bookmark className="h-5 w-5 text-primary/70" />
-              )}
-            </Button>
-          </div>
+          <CardTitle className="text-2xl text-black mb-2 sm:mb-0">{user.name || user.login}</CardTitle>
           <CardDescription className="text-base">
             <a
               href={user.html_url}
